@@ -27,14 +27,20 @@ $apcontent = Import-Csv $apfile
 Connect-AutoPilotIntune -user $adminuser | Out-Null
 Import-AutoPilotCSV -csvFile $apfile
 $grp = get-azureadgroup -SearchString $aadsecgroup
+$choice = "Wait to be added to group?"
+while ($choice -notmatch "[y|n]"){
+    $choice = read-host "Do you want to continue? (Y/N)"
+    }
+    if ($choice -eq "y"){
 foreach ($ap in $apcontent) {
     while ((Get-AzureADDevice -SearchString $ap.'Device Serial Number').count -ne 1) {Start-Sleep -Seconds 10}
     $device = Get-AzureADDevice -SearchString $ap.'Device Serial Number'
     Add-AzureADGroupMember -ObjectId $grp.objectid -RefObjectId $device.objectid
 }
+}
 $ErrorActionPreference = "stop"
 
-$disk = get-disk | Where-Object {$_.FriendlyName -notlike '*iron*'}
+$disk = get-disk | Where-Object {$_.isboot -notlike $true}
 $disk | Set-Disk -IsOffline $false
 $disk | set-disk -IsReadOnly $false
 if ($disk.PartitionStyle -eq "MBR") {
