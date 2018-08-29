@@ -9,10 +9,10 @@ if (!(Test-Path -Path $apFilePath)) {
 }
 $nugetVer = (Get-PackageProvider -name "NuGet" -ListAvailable).version
 if ($nugetVer.major -lt 2 -and $nugetVer.Minor -lt 8) {
-    Install-PackageProvider -name "nuget" -ForceBootstrap -Force -Verbose
+    Install-PackageProvider -name "NuGet" -ForceBootstrap -Force -Verbose
 }
-if ((Get-InstalledScript -Name "get-windowsautopilotinfo").version -lt 1.3) {
-    Install-Script -Name "get-windowsautopilotinfo" -Force -Verbose
+if ((Get-InstalledScript -Name "Get-WindowsAutoPilotInfo").version -lt 1.3) {
+    Install-Script -Name "Get-WindowsAutoPilotInfo" -Force -Verbose
 }
 if ((Get-ExecutionPolicy).ToString() -ne "Bypass") {
     Set-ExecutionPolicy -ExecutionPolicy Bypass -Force -Scope CurrentUser
@@ -42,13 +42,12 @@ while (($secGroup = (Read-Host -Prompt "Should this device join the security gro
 #region AP Enroll
 if ($newMachine -match '[nN]') {
     try {
-        get-windowsautopilotinfo.ps1 -OutputFile $apFile
+        Get-WindowsAutoPilotInfo -OutputFile $apFile
         Import-Module -name WindowsAutoPilotIntune
         $azureAdmin = Connect-AzureAD
         if (Test-Path -Path $apFilePath) {
             $apConnect = Import-Csv $apFile
             Connect-AutoPilotIntune -user $azureAdmin.Account
-            Get-AutoPilotDevice -id 
             Import-AutoPilotCSV -csvFile $apFile
         }
         else {
