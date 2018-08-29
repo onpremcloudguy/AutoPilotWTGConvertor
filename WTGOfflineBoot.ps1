@@ -54,31 +54,35 @@ $disk | set-disk -IsReadOnly $false
 if ($disk.PartitionStyle -eq "MBR") {
     Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$false -RemoveOEM
     Initialize-Disk -Number $disk.DiskNumber -PartitionStyle MBR
-    $sysPar = New-Partition -DiskNumber $disk.DiskNumber -UseMaximumSize -MbrType IFS -IsActive -AssignDriveLetter
-    $drvLtr = $sysPar.DriveLetter
-    $sysVol = Format-Volume -Partition $sysPar -FileSystem NTFS -Force -Confirm:$false
+    $syspar = New-Partition -DiskNumber $disk.DiskNumber -UseMaximumSize -MbrType IFS -IsActive -AssignDriveLetter
+    $drvltr = $syspar.DriveLetter
+    $sysvol = Format-Volume -Partition $syspar -FileSystem NTFS -Force -Confirm:$false
     
 }
 elseif ($disk.PartitionStyle -eq "GPT") {
-    $osPar = $disk | Get-Partition | Sort-Object Size -Descending | Select-Object -First 1
-    if ($osPar.size -lt 64Gb) {
-        $osPar = $disk | New-Partition -UseMaximumSize -AssignDriveLetter
-    }
-    $drvLtr = $osPar.DriveLetter
-    Format-Volume -DriveLetter $drvLtr -FileSystem NTFS
+    Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$false -RemoveOEM
+    Initialize-Disk -Number $disk.DiskNumber -PartitionStyle GPT
+    
+    $systemPartition = New-Partition -DiskNumber $disk.Number -Size 260MB -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}'
+
+    $systemVolume = Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$false
+
+    $systemPartition | Set-Partition -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}'
+    $systemPartition | Add-PartitionAccessPath -AssignDriveLetter
+    $windowsPartition = New-Partition -DiskNumber $disk.Number -UseMaximumSize -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}'
+
+    $windowsVolume = Format-Volume -Partition $windowsPartition -FileSystem NTFS -Force -Confirm:$false
+    $drvltr = $windowsVolume.DriveLetter
 }
-$isoPath = "C:\en_windows_10_business_editions_version_1803_updated_march_2018_x64_dvd_12063333.iso"
-$isoDisk = Mount-DiskImage $isoPath -PassThru
-$isoLtr = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
+$isopath = "C:\en_windows_10_business_editions_version_1803_updated_march_2018_x64_dvd_12063333.iso"
+$ISOdisk = Mount-DiskImage $isopath -PassThru
+$isoltr = (Get-DiskImage -ImagePath $isopath | Get-Volume).DriveLetter
 Import-Module dism
-Expand-WindowsImage -ApplyPath "$($drvLtr)`:" -ImagePath "$($isoLtr):\sources\install.wim" -Index 3
-if (!(test-path -Path "$($drvLtr):\efi\microsoft\boot\bcd")) {
-    $bcdBootArgs = "$($drvLtr):\windows /s $drvLtr`: /v /f UEFI"
-    Start-Process "bcdboot.exe" -ArgumentList " $bcdBootArgs" -Wait
-    Start-Process "bcdboot.exe" -ArgumentList "/store $($drvLtr):\efi\microsoft\boot\bcd /set `{bootmgr`} device locate" -Wait
-    Start-Process "bcdboot.exe" -ArgumentList "/store $($drvLtr):\efi\microsoft\boot\bcd /set `{default`} device locate" -Wait
-    Start-Process "bcdboot.exe" -ArgumentList "/store $($drvLtr):\efi\microsoft\boot\bcd /set `{default`} osdevice locate" -Wait
-}
+Expand-WindowsImage -ApplyPath "$($drvltr)`:" -ImagePath "$($isoltr):\sources\install.wim" -Index 3
+
+$bcdbootargs = "$drvltr`:\windows /s $($systemPartition.driveletter)`: /v"
+Start-Process "bcdboot.exe" -ArgumentList " $bcdbootargs" -Wait
+
 $disk | set-disk -isreadonly $true
 $disk | set-disk -isoffline $true
-$isoPath | Dismount-DiskImage
+$isopath | Dismount-DiskImage
