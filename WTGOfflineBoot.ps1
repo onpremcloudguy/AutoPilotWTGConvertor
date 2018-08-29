@@ -1,4 +1,4 @@
-﻿#region config
+#region config
 $apFilePath = "$env:SystemDrive\tempAP"
 $apFile = "$apFilePath\$($env:ComputerName).csv"
 $aadSecGroup = "ZZZ - VIT Intune Devices"
@@ -96,13 +96,13 @@ elseif ($disk.PartitionStyle -eq "GPT") {
     Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
     Initialize-Disk -Number $disk.DiskNumber -PartitionStyle GPT
     
-    $systemPartition = New-Partition -DiskNumber $disk.Number -Size 260MB -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}'
+    $systemPartition = New-Partition -DiskNumber $disk.Number -Size 260MB -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
 
     $systemVolume = Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False
 
     $systemPartition | Set-Partition -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}'
     $systemPartition | Add-PartitionAccessPath -AssignDriveLetter
-    $windowsPartition = New-Partition -DiskNumber $disk.Number -UseMaximumSize -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}'
+    $windowsPartition = New-Partition -DiskNumber $disk.Number -UseMaximumSize -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
 
     $windowsVolume = Format-Volume -Partition $windowsPartition -FileSystem NTFS -Force -Confirm:$False
     $drvLtr = $windowsVolume.DriveLetter
