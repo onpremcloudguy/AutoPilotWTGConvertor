@@ -1,6 +1,9 @@
-﻿$apFilePath = "c:\tempap"
-$apFile = "$apFilePath\$($env:computername).csv"
-$aadSecGroup = "AAD AP Group"
+﻿#region config
+$apFilePath = "$env:SystemDrive\tempAP"
+$apFile = "$apFilePath\$($env:ComputerName).csv"
+$aadSecGroup = "ZZZ - VIT Intune Devices"
+#endregion
+#region set up environment modules
 if (!(Test-Path -Path $apFilePath)) {
     new-item -Path $apFilePath -ItemType Directory | Out-Null
 }
@@ -14,34 +17,64 @@ if ((Get-InstalledScript -Name "get-windowsautopilotinfo").version -lt 1.3) {
 if ((Get-ExecutionPolicy).ToString() -ne "Bypass") {
     Set-ExecutionPolicy -ExecutionPolicy Bypass -Force -Scope CurrentUser
 }
-get-windowsautopilotinfo.ps1 -OutputFile $apFile
+if ((Get-Module -listavailable -name AzureADPreview).count -ne 1) {
+    Install-Module -name AzureADPreview -scope allusers -Force -AllowClobber
+}
+else {
+    Update-Module -name AzureADPreview
+}
+Import-Module -name AzureADPreview
+if ((Get-Module -listavailable -name WindowsAutoPilotIntune).count -ne 1) {
+    Install-Module -name WindowsAutoPilotIntune -scope allusers -Force
+}
+else {
+    Update-Module -name WindowsAutoPilotIntune
+}
+#endregion
+#region asking questions
+while (($newMachine = (Read-Host -Prompt "Is this device already enrolled to AutoPilot? (Y/N)")) -notmatch '[yY|nN]') { 
+    Write-Host " Y or N ? " -ForegroundColor Black -BackgroundColor Yellow
+}
+while (($secGroup = (Read-Host -Prompt "Should this device join the security group: $($aadSecGroup) ? (Y/N)")) -notmatch '[yY|nN]') { 
+    Write-Host " Y or N ? " -ForegroundColor Black -BackgroundColor Yellow
+}
+#endregion
+#region AP Enroll
+if ($newMachine -match '[yY]') {
+    try {
+        get-windowsautopilotinfo.ps1 -OutputFile $apFile
+        Import-Module -name WindowsAutoPilotIntune
+        $azureAdmin = Connect-AzureAD
+        if (Test-Path -Path $apFilePath){
+            $apConnect = Import-Csv $apFile
+            Connect-AutoPilotIntune -user $azureAdmin.Account
+            Import-AutoPilotCSV -csvFile $apFile
+        }
+        else {
+            throw ""
+        }
+    }
+    catch {
+        Write-Host $_.Exception.Messages
+    }
+}
+#endregion
+#region AD Sec Group Enroll
+if ($secGroup -match '[yY]') {
 
-if ((get-module -listavailable -name AzureADPreview).count -ne 1) {
-    install-module -name AzureADPreview -scope allusers -Force -AllowClobber
 }
-else {
-    update-module -name AzureADPreview
-}
-import-module -name AzureADPreview
-if ((get-module -listavailable -name WindowsAutoPilotIntune).count -ne 1) {
-    install-module -name WindowsAutoPilotIntune -scope allusers -Force
-}
-else {
-    update-module -name WindowsAutoPilotIntune
-}
-import-module -name WindowsAutoPilotIntune
-$azureAdmin = connect-azuread
-$apConnect = Import-Csv $apFile
-Connect-AutoPilotIntune -user $azureAdmin.Account
-Import-AutoPilotCSV -csvFile $apFile
-$grp = get-azureadgroup -SearchString $aadSecGroup
-$choice = read-host "Wait to be added to group?"
+#endregion
+
+$grp = Get-AzureADGroup -SearchString $aadSecGroup
+$choice = Read-Host "Wait to be added to group?"
 while ($choice -notmatch "[y|n]") {
-    $choice = read-host "Do you want to continue? (Y/N)"
+    $choice = Read-Host "Do you want to continue? (Y/N)"
 }
 if ($choice -eq "y") {
     foreach ($ap in $apConnect) {
-        while ((Get-AzureADDevice -SearchString $ap.'Device Serial Number').count -ne 1) {Start-Sleep -Seconds 10}
+        while ((Get-AzureADDevice -SearchString $ap.'Device Serial Number').count -ne 1) {
+            Start-Sleep -Seconds 10
+        }
         $device = Get-AzureADDevice -SearchString $ap.'Device Serial Number'
         Add-AzureADGroupMember -ObjectId $grp.objectid -RefObjectId $device.objectid
     }
