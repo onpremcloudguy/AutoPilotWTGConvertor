@@ -40,18 +40,19 @@ while (($secGroup = (Read-Host -Prompt "Should this device join the security gro
 }
 #endregion
 #region AP Enroll
-if ($newMachine -match '[yY]') {
+if ($newMachine -match '[nN]') {
     try {
         get-windowsautopilotinfo.ps1 -OutputFile $apFile
         Import-Module -name WindowsAutoPilotIntune
         $azureAdmin = Connect-AzureAD
-        if (Test-Path -Path $apFilePath){
+        if (Test-Path -Path $apFilePath) {
             $apConnect = Import-Csv $apFile
             Connect-AutoPilotIntune -user $azureAdmin.Account
+            Get-AutoPilotDevice -id 
             Import-AutoPilotCSV -csvFile $apFile
         }
         else {
-            throw ""
+            throw "APHash file not found locally."
         }
     }
     catch {
@@ -66,18 +67,12 @@ if ($secGroup -match '[yY]') {
 #endregion
 
 $grp = Get-AzureADGroup -SearchString $aadSecGroup
-$choice = Read-Host "Wait to be added to group?"
-while ($choice -notmatch "[y|n]") {
-    $choice = Read-Host "Do you want to continue? (Y/N)"
-}
-if ($choice -eq "y") {
-    foreach ($ap in $apConnect) {
-        while ((Get-AzureADDevice -SearchString $ap.'Device Serial Number').count -ne 1) {
-            Start-Sleep -Seconds 10
-        }
-        $device = Get-AzureADDevice -SearchString $ap.'Device Serial Number'
-        Add-AzureADGroupMember -ObjectId $grp.objectid -RefObjectId $device.objectid
+foreach ($ap in $apConnect) {
+    while ((Get-AzureADDevice -SearchString $ap.'Device Serial Number').count -ne 1) {
+        Start-Sleep -Seconds 10
     }
+    $device = Get-AzureADDevice -SearchString $ap.'Device Serial Number'
+    Add-AzureADGroupMember -ObjectId $grp.objectid -RefObjectId $device.objectid
 }
 $ErrorActionPreference = "stop"
 
