@@ -1,6 +1,6 @@
 ﻿$apFilePath = "c:\tempap"
 $apFile = "$apFilePath\$($env:computername).csv"
-$aadSecGroup = "AAD AP Group"
+$aadSecGroup = "ZZZ - VIT Intune Devices"
 if (!(Test-Path -Path $apFilePath)) {
     new-item -Path $apFilePath -ItemType Directory | Out-Null
 }
