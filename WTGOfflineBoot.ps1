@@ -35,11 +35,11 @@ if (!(Test-Path -Path $apFilePath)) {
 Write-Host "Setting up local environment.."
 $nugetVer = (Get-PackageProvider -name "NuGet" -ListAvailable).version
 if ($nugetVer.major -lt 2 -and $nugetVer.Minor -lt 8) {
-    Install-PackageProvider -name "NuGet" -ForceBootstrap -Force -Verbose
+    Install-PackageProvider -name "NuGet" -ForceBootstrap -Force | Out-Null
     Write-Host " ++ NuGet configured.."
 }
 if ((Get-InstalledScript -Name "Get-WindowsAutoPilotInfo").version -lt 1.3) {
-    Install-Script -Name "Get-WindowsAutoPilotInfo" -Force -Verbose
+    Install-Script -Name "Get-WindowsAutoPilotInfo" -Force | Out-Null
     Write-Host " ++ AP script installed.."
 }
 if ((Get-ExecutionPolicy).ToString() -ne "Bypass") {
@@ -47,20 +47,20 @@ if ((Get-ExecutionPolicy).ToString() -ne "Bypass") {
     Write-Host " ++ execution policy set to bypass.."
 }
 if ((Get-Module -listavailable -name AzureADPreview).count -ne 1) {
-    Install-Module -name AzureADPreview -scope allusers -Force -AllowClobber
+    Install-Module -name AzureADPreview -scope allusers -Force -AllowClobber | Out-Null
     Write-Host " ++ AzureADPreview module installed.."
 }
 else {
-    Update-Module -name AzureADPreview
+    Update-Module -name AzureADPreview | Out-Null
     Write-Host " ++ AzureADPreview module upgraded.."
 }
 Import-Module -name AzureADPreview
 if ((Get-Module -listavailable -name WindowsAutoPilotIntune).count -ne 1) {
-    Install-Module -name WindowsAutoPilotIntune -scope allusers -Force
+    Install-Module -name WindowsAutoPilotIntune -scope allusers -Force | Out-Null
     Write-Host " ++ WindowsAutoPilotIntune module installed.."
 }
 else {
-    Update-Module -name WindowsAutoPilotIntune
+    Update-Module -name WindowsAutoPilotIntune | Out-Null
     Write-Host " ++ WindowsAutoPilotIntune module upgraded.."
 }
 Write-Host " `nSetting up device for AutoPilot Enrollment.."
