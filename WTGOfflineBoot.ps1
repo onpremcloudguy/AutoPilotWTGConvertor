@@ -78,14 +78,33 @@ $uefi = $true
 $disk = get-disk | Where-Object {$_.isboot -notlike $True}
 $disk | Set-Disk -IsOffline $False
 $disk | set-disk -IsReadOnly $False
+$UEFIBoot = ""
 #TODO: SH: add in step to convert from BIOS to UEFI
 if ($disk.PartitionStyle -eq "MBR") {
-    Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
-    Initialize-Disk -Number $disk.DiskNumber -PartitionStyle MBR
-    $sysPar = New-Partition -DiskNumber $disk.DiskNumber -UseMaximumSize -MbrType IFS -IsActive -AssignDriveLetter
-    $drvLtr = $sysPar.DriveLetter
-    $sysVol = Format-Volume -Partition $sysPar -FileSystem NTFS -Force -Confirm:$False
-    $uefi = $False
+    while (($UEFIBoot = (Read-Host -Prompt "Currently using BIOS, did you want to convert to UEFI BOOT? (Y/N)")) -notmatch '[yY|nN]') { 
+        Write-Host " Y or N ? " -ForegroundColor Black -BackgroundColor Yellow
+    }
+    if ($UEFIBoot -match '[yY]') {
+        Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
+        Initialize-Disk -Number $disk.DiskNumber -PartitionStyle GPT
+        $systemPartition = New-Partition -DiskNumber $disk.Number -Size 260MB -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
+        $systemVolume = Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False
+        $systemPartition | Set-Partition -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}'
+        $systemPartition | Add-PartitionAccessPath -AssignDriveLetter
+        $windowsPartition = New-Partition -DiskNumber $disk.Number -UseMaximumSize -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
+        $windowsVolume = Format-Volume -Partition $windowsPartition -FileSystem NTFS -Force -Confirm:$False
+        $drvLtr = $windowsVolume.DriveLetter
+        $uefi = $False
+    }
+    else {
+        Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
+        Initialize-Disk -Number $disk.DiskNumber -PartitionStyle MBR
+        $sysPar = New-Partition -DiskNumber $disk.DiskNumber -UseMaximumSize -MbrType IFS -IsActive -AssignDriveLetter
+        $drvLtr = $sysPar.DriveLetter
+        $sysVol = Format-Volume -Partition $sysPar -FileSystem NTFS -Force -Confirm:$False
+        $uefi = $False    
+    }
+    
 }
 elseif ($disk.PartitionStyle -eq "GPT") {
     Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
@@ -105,8 +124,8 @@ $ISOdisk = Mount-DiskImage $isoPath -PassThru
 $isoLtr = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
 Import-Module dism
 Expand-WindowsImage -ApplyPath "$($drvLtr)`:" -ImagePath "$($isoLtr):\sources\install.wim" -Index 3
-if($uefi){
-$bcdBootArgs = "$drvLtr`:\windows /s $($systemPartition.driveletter)`: /v"
+if ($uefi) {
+    $bcdBootArgs = "$drvLtr`:\windows /s $($systemPartition.driveletter)`: /v"
 }
 else {
     $bcdBootArgs = "$drvLtr`:\windows /s $($systemPartition.driveletter)`: /v /f BIOS"
@@ -117,3 +136,4 @@ Start-Process "bcdboot.exe" -ArgumentList " $bcdBootArgs" -Wait
 $disk | set-disk -isreadonly $True
 $disk | set-disk -isoffline $True
 $isoPath | Dismount-DiskImage
+if($UEFIBoot -match '[yY]'){Write-Host "You need to change the firmware manually to set it to use UEFI" -ForegroundColor Black -BackgroundColor Green}
