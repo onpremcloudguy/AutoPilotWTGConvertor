@@ -78,6 +78,7 @@ $uefi = $true
 $disk = get-disk | Where-Object {$_.isboot -notlike $True}
 $disk | Set-Disk -IsOffline $False
 $disk | set-disk -IsReadOnly $False
+#TODO: SH: add in step to convert from BIOS to UEFI
 if ($disk.PartitionStyle -eq "MBR") {
     Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
     Initialize-Disk -Number $disk.DiskNumber -PartitionStyle MBR
@@ -98,6 +99,7 @@ elseif ($disk.PartitionStyle -eq "GPT") {
     $drvLtr = $windowsVolume.DriveLetter
     $uefi = $False
 }
+#TODO: BR: get ISO's on root of C, if multiple use Read-Host to select and set to $ISOPath, if single then set as $ISOPath
 $isoPath = "C:\en_windows_10_business_editions_version_1803_updated_march_2018_x64_dvd_12063333.iso"
 $ISOdisk = Mount-DiskImage $isoPath -PassThru
 $isoLtr = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
