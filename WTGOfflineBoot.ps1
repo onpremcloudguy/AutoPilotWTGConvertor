@@ -152,8 +152,9 @@ try {
         $i = 0
         foreach ($iso in $isos) {
             $i++
-            $menu += "{0}. {1}" -f $i, $iso.Name
+            $menu += " {0}. {1}`n" -f $i, $iso.Name
         }
+        Write-Host $menu
         $r = Read-Host "`nSelect an ISO to use by number"
         $isopath = "C:\$($menu[$r-1].Split()[1])"
         Write-Host " ++ Going to use the following ISO to install windows: $isopath"
