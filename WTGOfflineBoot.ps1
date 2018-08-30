@@ -79,7 +79,6 @@ $disk = get-disk | Where-Object {$_.isboot -notlike $True}
 $disk | Set-Disk -IsOffline $False
 $disk | set-disk -IsReadOnly $False
 $UEFIBoot = ""
-#TODO: SH: add in step to convert from BIOS to UEFI
 if ($disk.PartitionStyle -eq "MBR") {
     while (($UEFIBoot = (Read-Host -Prompt "Currently using BIOS, did you want to convert to UEFI BOOT? (Y/N)")) -notmatch '[yY|nN]') { 
         Write-Host " Y or N ? " -ForegroundColor Black -BackgroundColor Yellow
@@ -118,8 +117,24 @@ elseif ($disk.PartitionStyle -eq "GPT") {
     $drvLtr = $windowsVolume.DriveLetter
     $uefi = $true
 }
-#TODO: BR: get ISO's on root of C, if multiple use Read-Host to select and set to $ISOPath, if single then set as $ISOPath
-$isoPath = "C:\en_windows_10_business_editions_version_1803_updated_march_2018_x64_dvd_12063333.iso"
+$isos = get-childitem -Path "c:\*" -Include *.iso
+if($isos.Count -gt 1){
+    $i = 0
+    $isos | ForEach-Object -Begin {$i=0} -Process {
+        $i++
+        "{0}. {1}" -f $i,$_.Name
+        } -outvariable menu
+        $r = Read-Host "Select an ISO to use by number"
+        #Write-Host "selecting $($menu[$r-1])" -ForegroundColor Green
+        $isopath = "C:\$($menu[$r-1].Split()[1])"
+        Write-Host "Going to use the following ISO to install windows: $isopath"
+}elseif ($isos.count -eq 1) {
+    $isoPath = "c:\$($isos.name)"
+    Write-Host "Going to use the following ISO to install windows: $isopath"
+}elseif ($isos.Count -eq 0){
+    Write-Host "Error no ISO found on the root of C: please add one" -ForegroundColor Red
+    throw "Error no ISO found on the root of C: please add one"
+}
 $ISOdisk = Mount-DiskImage $isoPath -PassThru
 $isoLtr = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
 Import-Module dism
