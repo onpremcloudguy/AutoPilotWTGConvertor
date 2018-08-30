@@ -145,57 +145,6 @@ catch {
 }
 try {
     $ErrorActionPreference = "stop"
-    Write-Host " `nPreparing system for installation of Windows 10.."
-    $uefi = $true
-    $disk = get-disk | Where-Object {$_.isboot -notlike $True}
-    $disk | Set-Disk -IsOffline $False
-    $disk | set-disk -IsReadOnly $False
-    $UEFIBoot = $null
-    if ($disk.PartitionStyle -eq "MBR") {
-        Write-Host " ++ Disk partition: MBR.."
-        while (($UEFIBoot = (Read-Host -Prompt "`nCurrently using BIOS, did you want to convert to UEFI BOOT? (Y/N)")) -notmatch '[yY|nN]') { 
-            Write-Host " Y or N ? " -ForegroundColor Black -BackgroundColor Yellow
-        }
-        if ($UEFIBoot -match '[yY]') {
-            Write-Host " ++ Switching to UEFI Boot.."
-            Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
-            Initialize-Disk -Number $disk.DiskNumber -PartitionStyle GPT
-            $systemPartition = New-Partition -DiskNumber $disk.Number -Size 260MB -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
-            #$systemVolume = Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False
-            Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False
-            $systemPartition | Set-Partition -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}'
-            $systemPartition | Add-PartitionAccessPath -AssignDriveLetter
-            $windowsPartition = New-Partition -DiskNumber $disk.Number -UseMaximumSize -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
-            $windowsVolume = Format-Volume -Partition $windowsPartition -FileSystem NTFS -Force -Confirm:$False
-            $drvLtr = $windowsVolume.DriveLetter
-            $uefi = $true
-        }
-        else {
-            Write-Host " ++ Staying with BIOS.."
-            Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
-            Initialize-Disk -Number $disk.DiskNumber -PartitionStyle MBR
-            $sysPar = New-Partition -DiskNumber $disk.DiskNumber -UseMaximumSize -MbrType IFS -IsActive -AssignDriveLetter
-            $drvLtr = $sysPar.DriveLetter
-            #$sysVol = Format-Volume -Partition $sysPar -FileSystem NTFS -Force -Confirm:$False
-            Format-Volume -Partition $sysPar -FileSystem NTFS -Force -Confirm:$False
-            $uefi = $False    
-        }
-        
-    }
-    elseif ($disk.PartitionStyle -eq "GPT") {
-        Write-Host " ++ Disk partition: GPT.."
-        Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
-        Initialize-Disk -Number $disk.DiskNumber -PartitionStyle GPT
-        $systemPartition = New-Partition -DiskNumber $disk.Number -Size 260MB -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
-        #$systemVolume = Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False
-        Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False
-        $systemPartition | Set-Partition -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}'
-        $systemPartition | Add-PartitionAccessPath -AssignDriveLetter
-        $windowsPartition = New-Partition -DiskNumber $disk.Number -UseMaximumSize -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
-        $windowsVolume = Format-Volume -Partition $windowsPartition -FileSystem NTFS -Force -Confirm:$False
-        $drvLtr = $windowsVolume.DriveLetter
-        $uefi = $true
-    }
     Write-Host "`nGetting ISO images ready.."
     $isos = get-childitem -Path "c:\*" -Include *.iso
     $menu = @()
@@ -216,6 +165,56 @@ try {
     elseif ($isos.Count -eq 0) {
         throw "Error no ISO found on the root of C: please add one"
     }
+    Write-Host " `nPreparing system for installation of Windows 10.."
+    $uefi = $true
+    $disk = get-disk | Where-Object {$_.isboot -notlike $True}
+    $disk | Set-Disk -IsOffline $False
+    $disk | set-disk -IsReadOnly $False
+    $UEFIBoot = $null
+    if ($disk.PartitionStyle -eq "MBR") {
+        Write-Host " ++ Disk partition: MBR.."
+        while (($UEFIBoot = (Read-Host -Prompt "`nCurrently using BIOS, did you want to convert to UEFI BOOT? (Y/N)")) -notmatch '[yY|nN]') { 
+            Write-Host " Y or N ? " -ForegroundColor Black -BackgroundColor Yellow
+        }
+        if ($UEFIBoot -match '[yY]') {
+            Write-Host " ++ Switching to UEFI Boot.."
+            Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
+            Initialize-Disk -Number $disk.DiskNumber -PartitionStyle GPT
+            $systemPartition = New-Partition -DiskNumber $disk.Number -Size 260MB -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
+            #$systemVolume = Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False
+            Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False | Out-Null
+            $systemPartition | Set-Partition -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}'
+            $systemPartition | Add-PartitionAccessPath -AssignDriveLetter
+            $windowsPartition = New-Partition -DiskNumber $disk.Number -UseMaximumSize -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
+            $windowsVolume = Format-Volume -Partition $windowsPartition -FileSystem NTFS -Force -Confirm:$False
+            $drvLtr = $windowsPartition.DriveLetter
+            $uefi = $true
+        }
+        else {
+            Write-Host " ++ Staying with BIOS.."
+            Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
+            Initialize-Disk -Number $disk.DiskNumber -PartitionStyle MBR
+            $sysPar = New-Partition -DiskNumber $disk.DiskNumber -UseMaximumSize -MbrType IFS -IsActive -AssignDriveLetter
+            $drvLtr = $sysPar.DriveLetter
+            #$sysVol = Format-Volume -Partition $sysPar -FileSystem NTFS -Force -Confirm:$False
+            Format-Volume -Partition $sysPar -FileSystem NTFS -Force -Confirm:$False | Out-Null
+            $uefi = $False    
+        }
+    }
+    elseif ($disk.PartitionStyle -eq "GPT") {
+        Write-Host " ++ Disk partition: GPT.."
+        Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
+        Initialize-Disk -Number $disk.DiskNumber -PartitionStyle GPT
+        $systemPartition = New-Partition -DiskNumber $disk.Number -Size 260MB -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
+        #$systemVolume = Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False
+        Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False | Out-Null
+        $systemPartition | Set-Partition -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}'
+        $systemPartition | Add-PartitionAccessPath -AssignDriveLetter
+        $windowsPartition = New-Partition -DiskNumber $disk.Number -UseMaximumSize -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
+        $windowsVolume = Format-Volume -Partition $windowsPartition -FileSystem NTFS -Force -Confirm:$False
+        $drvLtr = $windowsPartition.DriveLetter
+        $uefi = $true
+    }
     Write-Host " ++ Mounting ISO image.."
     Mount-DiskImage $isoPath -PassThru
     $isoLtr = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
@@ -229,7 +228,6 @@ try {
     }
     Write-Host "`nStarting BCDBoot.exe with arguments $($bcdBootArgs)" 
     Start-Process "bcdboot.exe" -ArgumentList " $bcdBootArgs" -Wait
-    
     Write-Host "`nSetting system disk to RO and taking offline.."
     $disk | set-disk -isreadonly $True
     $disk | set-disk -isoffline $True
