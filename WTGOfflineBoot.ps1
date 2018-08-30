@@ -143,22 +143,52 @@ try {
 catch {
     Write-Host $_.Exception.Message -ForegroundColor Black -BackgroundColor Yellow
 }
-
-$ErrorActionPreference = "stop"
-$uefi = $true
-$disk = get-disk | Where-Object {$_.isboot -notlike $True}
-$disk | Set-Disk -IsOffline $False
-$disk | set-disk -IsReadOnly $False
-$UEFIBoot = ""
-if ($disk.PartitionStyle -eq "MBR") {
-    while (($UEFIBoot = (Read-Host -Prompt "Currently using BIOS, did you want to convert to UEFI BOOT? (Y/N)")) -notmatch '[yY|nN]') { 
-        Write-Host " Y or N ? " -ForegroundColor Black -BackgroundColor Yellow
+try {
+    $ErrorActionPreference = "stop"
+    Write-Host " `nPreparing system for installation of Windows 10.."
+    $uefi = $true
+    $disk = get-disk | Where-Object {$_.isboot -notlike $True}
+    $disk | Set-Disk -IsOffline $False
+    $disk | set-disk -IsReadOnly $False
+    $UEFIBoot = $null
+    if ($disk.PartitionStyle -eq "MBR") {
+        Write-Host " ++ Disk partition: MBR.."
+        while (($UEFIBoot = (Read-Host -Prompt "`nCurrently using BIOS, did you want to convert to UEFI BOOT? (Y/N)")) -notmatch '[yY|nN]') { 
+            Write-Host " Y or N ? " -ForegroundColor Black -BackgroundColor Yellow
+        }
+        if ($UEFIBoot -match '[yY]') {
+            Write-Host " ++ Switching to UEFI Boot.."
+            Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
+            Initialize-Disk -Number $disk.DiskNumber -PartitionStyle GPT
+            $systemPartition = New-Partition -DiskNumber $disk.Number -Size 260MB -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
+            #$systemVolume = Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False
+            Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False
+            $systemPartition | Set-Partition -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}'
+            $systemPartition | Add-PartitionAccessPath -AssignDriveLetter
+            $windowsPartition = New-Partition -DiskNumber $disk.Number -UseMaximumSize -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
+            $windowsVolume = Format-Volume -Partition $windowsPartition -FileSystem NTFS -Force -Confirm:$False
+            $drvLtr = $windowsVolume.DriveLetter
+            $uefi = $true
+        }
+        else {
+            Write-Host " ++ Staying with BIOS.."
+            Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
+            Initialize-Disk -Number $disk.DiskNumber -PartitionStyle MBR
+            $sysPar = New-Partition -DiskNumber $disk.DiskNumber -UseMaximumSize -MbrType IFS -IsActive -AssignDriveLetter
+            $drvLtr = $sysPar.DriveLetter
+            #$sysVol = Format-Volume -Partition $sysPar -FileSystem NTFS -Force -Confirm:$False
+            Format-Volume -Partition $sysPar -FileSystem NTFS -Force -Confirm:$False
+            $uefi = $False    
+        }
+        
     }
-    if ($UEFIBoot -match '[yY]') {
+    elseif ($disk.PartitionStyle -eq "GPT") {
+        Write-Host " ++ Disk partition: GPT.."
         Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
         Initialize-Disk -Number $disk.DiskNumber -PartitionStyle GPT
         $systemPartition = New-Partition -DiskNumber $disk.Number -Size 260MB -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
-        $systemVolume = Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False
+        #$systemVolume = Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False
+        Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False
         $systemPartition | Set-Partition -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}'
         $systemPartition | Add-PartitionAccessPath -AssignDriveLetter
         $windowsPartition = New-Partition -DiskNumber $disk.Number -UseMaximumSize -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
@@ -166,62 +196,48 @@ if ($disk.PartitionStyle -eq "MBR") {
         $drvLtr = $windowsVolume.DriveLetter
         $uefi = $true
     }
-    else {
-        Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
-        Initialize-Disk -Number $disk.DiskNumber -PartitionStyle MBR
-        $sysPar = New-Partition -DiskNumber $disk.DiskNumber -UseMaximumSize -MbrType IFS -IsActive -AssignDriveLetter
-        $drvLtr = $sysPar.DriveLetter
-        $sysVol = Format-Volume -Partition $sysPar -FileSystem NTFS -Force -Confirm:$False
-        $uefi = $False    
+    Write-Host "`nGetting ISO images ready.."
+    $isos = get-childitem -Path "c:\*" -Include *.iso
+    $menu = @()
+    if ($isos.Count -gt 1) {
+        $i = 0
+        foreach ($iso in $isos) {
+            $i++
+            $menu += "{0}. {1}" -f $i, $iso.Name
+        } -outvariable menu
+        $r = Read-Host "`nSelect an ISO to use by number"
+        $isopath = "C:\$($menu[$r-1].Split()[1])"
+        Write-Host " ++ Going to use the following ISO to install windows: $isopath"
     }
+    elseif ($isos.count -eq 1) {
+        $isoPath = "c:\$($isos.name)"
+        Write-Host " ++ Going to use the following ISO to install windows: $isopath"
+    }
+    elseif ($isos.Count -eq 0) {
+        throw "Error no ISO found on the root of C: please add one"
+    }
+    Write-Host " ++ Mounting ISO image.."
+    Mount-DiskImage $isoPath -PassThru
+    $isoLtr = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
+    Import-Module dism
+    Expand-WindowsImage -ApplyPath "$($drvLtr)`:" -ImagePath "$($isoLtr):\sources\install.wim" -Index 3
+    if ($uefi) {
+        $bcdBootArgs = "$drvLtr`:\windows /s $($systemPartition.driveletter)`: /v"
+    }
+    else {
+        $bcdBootArgs = "$drvLtr`:\windows /s $drvLtr`: /v /f BIOS"
+    }
+    Write-Host "`nStarting BCDBoot.exe with arguments $($bcdBootArgs)" 
+    Start-Process "bcdboot.exe" -ArgumentList " $bcdBootArgs" -Wait
     
+    Write-Host "`nSetting system disk to RO and taking offline.."
+    $disk | set-disk -isreadonly $True
+    $disk | set-disk -isoffline $True
+    $isoPath | Dismount-DiskImage
+    if ($UEFIBoot -match '[yY]') {
+        Write-Host "`nYou need to change the firmware manually to set it to use UEFI" -ForegroundColor Black -BackgroundColor Green
+    }
 }
-elseif ($disk.PartitionStyle -eq "GPT") {
-    Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
-    Initialize-Disk -Number $disk.DiskNumber -PartitionStyle GPT
-    $systemPartition = New-Partition -DiskNumber $disk.Number -Size 260MB -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
-    $systemVolume = Format-Volume -Partition $systemPartition -FileSystem FAT32 -Force -Confirm:$False
-    $systemPartition | Set-Partition -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}'
-    $systemPartition | Add-PartitionAccessPath -AssignDriveLetter
-    $windowsPartition = New-Partition -DiskNumber $disk.Number -UseMaximumSize -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
-    $windowsVolume = Format-Volume -Partition $windowsPartition -FileSystem NTFS -Force -Confirm:$False
-    $drvLtr = $windowsVolume.DriveLetter
-    $uefi = $true
+catch {
+    Write-Host $_.Exception.Message -ForegroundColor Black -BackgroundColor Red
 }
-$isos = get-childitem -Path "c:\*" -Include *.iso
-if ($isos.Count -gt 1) {
-    $i = 0
-    $isos | ForEach-Object -Begin {$i = 0} -Process {
-        $i++
-        "{0}. {1}" -f $i, $_.Name
-    } -outvariable menu
-    $r = Read-Host "Select an ISO to use by number"
-    #Write-Host "selecting $($menu[$r-1])" -ForegroundColor Green
-    $isopath = "C:\$($menu[$r-1].Split()[1])"
-    Write-Host "Going to use the following ISO to install windows: $isopath"
-}
-elseif ($isos.count -eq 1) {
-    $isoPath = "c:\$($isos.name)"
-    Write-Host "Going to use the following ISO to install windows: $isopath"
-}
-elseif ($isos.Count -eq 0) {
-    Write-Host "Error no ISO found on the root of C: please add one" -ForegroundColor Red
-    throw "Error no ISO found on the root of C: please add one"
-}
-$ISOdisk = Mount-DiskImage $isoPath -PassThru
-$isoLtr = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
-Import-Module dism
-Expand-WindowsImage -ApplyPath "$($drvLtr)`:" -ImagePath "$($isoLtr):\sources\install.wim" -Index 3
-if ($uefi) {
-    $bcdBootArgs = "$drvLtr`:\windows /s $($systemPartition.driveletter)`: /v"
-}
-else {
-    $bcdBootArgs = "$drvLtr`:\windows /s $drvLtr`: /v /f BIOS"
-}
-
-Start-Process "bcdboot.exe" -ArgumentList " $bcdBootArgs" -Wait
-
-$disk | set-disk -isreadonly $True
-$disk | set-disk -isoffline $True
-$isoPath | Dismount-DiskImage
-if ($UEFIBoot -match '[yY]') {Write-Host "You need to change the firmware manually to set it to use UEFI" -ForegroundColor Black -BackgroundColor Green}
