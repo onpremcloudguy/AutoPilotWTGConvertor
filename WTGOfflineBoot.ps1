@@ -118,20 +118,22 @@ elseif ($disk.PartitionStyle -eq "GPT") {
     $uefi = $true
 }
 $isos = get-childitem -Path "c:\*" -Include *.iso
-if($isos.Count -gt 1){
+if ($isos.Count -gt 1) {
     $i = 0
-    $isos | ForEach-Object -Begin {$i=0} -Process {
+    $isos | ForEach-Object -Begin {$i = 0} -Process {
         $i++
-        "{0}. {1}" -f $i,$_.Name
-        } -outvariable menu
-        $r = Read-Host "Select an ISO to use by number"
-        #Write-Host "selecting $($menu[$r-1])" -ForegroundColor Green
-        $isopath = "C:\$($menu[$r-1].Split()[1])"
-        Write-Host "Going to use the following ISO to install windows: $isopath"
-}elseif ($isos.count -eq 1) {
+        "{0}. {1}" -f $i, $_.Name
+    } -outvariable menu
+    $r = Read-Host "Select an ISO to use by number"
+    #Write-Host "selecting $($menu[$r-1])" -ForegroundColor Green
+    $isopath = "C:\$($menu[$r-1].Split()[1])"
+    Write-Host "Going to use the following ISO to install windows: $isopath"
+}
+elseif ($isos.count -eq 1) {
     $isoPath = "c:\$($isos.name)"
     Write-Host "Going to use the following ISO to install windows: $isopath"
-}elseif ($isos.Count -eq 0){
+}
+elseif ($isos.Count -eq 0) {
     Write-Host "Error no ISO found on the root of C: please add one" -ForegroundColor Red
     throw "Error no ISO found on the root of C: please add one"
 }
@@ -151,4 +153,4 @@ Start-Process "bcdboot.exe" -ArgumentList " $bcdBootArgs" -Wait
 $disk | set-disk -isreadonly $True
 $disk | set-disk -isoffline $True
 $isoPath | Dismount-DiskImage
-if($UEFIBoot -match '[yY]'){Write-Host "You need to change the firmware manually to set it to use UEFI" -ForegroundColor Black -BackgroundColor Green}
+if ($UEFIBoot -match '[yY]') {Write-Host "You need to change the firmware manually to set it to use UEFI" -ForegroundColor Black -BackgroundColor Green}
