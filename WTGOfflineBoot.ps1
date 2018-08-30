@@ -94,7 +94,7 @@ if ($disk.PartitionStyle -eq "MBR") {
         $windowsPartition = New-Partition -DiskNumber $disk.Number -UseMaximumSize -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
         $windowsVolume = Format-Volume -Partition $windowsPartition -FileSystem NTFS -Force -Confirm:$False
         $drvLtr = $windowsVolume.DriveLetter
-        $uefi = $False
+        $uefi = $true
     }
     else {
         Clear-Disk -Number $disk.DiskNumber -RemoveData -Confirm:$False -RemoveOEM
@@ -116,7 +116,7 @@ elseif ($disk.PartitionStyle -eq "GPT") {
     $windowsPartition = New-Partition -DiskNumber $disk.Number -UseMaximumSize -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter
     $windowsVolume = Format-Volume -Partition $windowsPartition -FileSystem NTFS -Force -Confirm:$False
     $drvLtr = $windowsVolume.DriveLetter
-    $uefi = $False
+    $uefi = $true
 }
 #TODO: BR: get ISO's on root of C, if multiple use Read-Host to select and set to $ISOPath, if single then set as $ISOPath
 $isoPath = "C:\en_windows_10_business_editions_version_1803_updated_march_2018_x64_dvd_12063333.iso"
@@ -125,7 +125,7 @@ $isoLtr = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
 Import-Module dism
 Expand-WindowsImage -ApplyPath "$($drvLtr)`:" -ImagePath "$($isoLtr):\sources\install.wim" -Index 3
 if ($uefi) {
-    $bcdBootArgs = "$drvLtr`:\windows /s $($systemPartition.driveletter)`: /v /f UEFI"
+    $bcdBootArgs = "$drvLtr`:\windows /s $($systemPartition.driveletter)`: /v"
 }
 else {
     $bcdBootArgs = "$drvLtr`:\windows /s $drvLtr`: /v /f BIOS"
