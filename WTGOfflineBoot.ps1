@@ -3,76 +3,147 @@ $apFilePath = "$env:SystemDrive\tempAP"
 $apFile = "$apFilePath\$($env:ComputerName).csv"
 $aadSecGroup = "ZZZ - VIT Intune Devices"
 #endregion
+#region Functions
+function Get-DeviceFromAutoPilot {
+    param (
+        [string]$serialNumber
+    )
+    $aadDevices = Get-AzureADDevice -All:$true | select-object *, @{Name = "APID"; Expression = {($_.DevicePhysicalIds | where-object {$_ -match "\[ZTDID\]"}) -replace "\[ZTDID\]:", ""}}
+    $apDevice = Get-AutoPilotDevice | Where-Object {
+        $_.serialNumber -eq "$serialNumber"
+    }
+    if ($apDevice) {
+        $enrolledDevice = $aadDevices | where-object {$_.APID -eq $APDevice.id}
+        if ($enrolledDevice) {
+            return $enrolledDevice
+        }
+        else {
+            return $null
+        }
+    }
+    else {
+        return $null
+    }
+}
+#endregion
 #region set up environment modules
+Clear-Host
+Write-Host "---------------------------------------------`nWindows To Go - AutoPilot Devie Configuration`n---------------------------------------------`n---------------------------------------------"
 if (!(Test-Path -Path $apFilePath)) {
     new-item -Path $apFilePath -ItemType Directory | Out-Null
 }
+Write-Host "Setting up local environment.."
 $nugetVer = (Get-PackageProvider -name "NuGet" -ListAvailable).version
 if ($nugetVer.major -lt 2 -and $nugetVer.Minor -lt 8) {
     Install-PackageProvider -name "NuGet" -ForceBootstrap -Force -Verbose
+    Write-Host " ++ NuGet configured.."
 }
 if ((Get-InstalledScript -Name "Get-WindowsAutoPilotInfo").version -lt 1.3) {
     Install-Script -Name "Get-WindowsAutoPilotInfo" -Force -Verbose
+    Write-Host " ++ AP script installed.."
 }
 if ((Get-ExecutionPolicy).ToString() -ne "Bypass") {
     Set-ExecutionPolicy -ExecutionPolicy Bypass -Force -Scope CurrentUser
+    Write-Host " ++ execution policy set to bypass.."
 }
 if ((Get-Module -listavailable -name AzureADPreview).count -ne 1) {
     Install-Module -name AzureADPreview -scope allusers -Force -AllowClobber
+    Write-Host " ++ AzureADPreview module installed.."
 }
 else {
     Update-Module -name AzureADPreview
+    Write-Host " ++ AzureADPreview module upgraded.."
 }
 Import-Module -name AzureADPreview
 if ((Get-Module -listavailable -name WindowsAutoPilotIntune).count -ne 1) {
     Install-Module -name WindowsAutoPilotIntune -scope allusers -Force
+    Write-Host " ++ WindowsAutoPilotIntune module installed.."
 }
 else {
     Update-Module -name WindowsAutoPilotIntune
+    Write-Host " ++ WindowsAutoPilotIntune module upgraded.."
 }
+Write-Host " `nSetting up device for AutoPilot Enrollment.."
 #endregion
-#region asking questions
-while (($newMachine = (Read-Host -Prompt "Is this device already enrolled to AutoPilot? (Y/N)")) -notmatch '[yY|nN]') { 
-    Write-Host " Y or N ? " -ForegroundColor Black -BackgroundColor Yellow
-}
-while (($secGroup = (Read-Host -Prompt "Should this device join the security group: $($aadSecGroup) ? (Y/N)")) -notmatch '[yY|nN]') { 
-    Write-Host " Y or N ? " -ForegroundColor Black -BackgroundColor Yellow
-}
-#endregion
-#region AP Enroll
-if ($newMachine -match '[nN]') {
-    try {
-        Get-WindowsAutoPilotInfo -OutputFile $apFile
-        Import-Module -name WindowsAutoPilotIntune
-        $azureAdmin = Connect-AzureAD
-        if (Test-Path -Path $apFilePath) {
-            $apConnect = Import-Csv $apFile
-            Connect-AutoPilotIntune -user $azureAdmin.Account
+try {
+    #region Connect to Azure and check AutoPilot device enrollment details.
+    Get-WindowsAutoPilotInfo -OutputFile $apFile
+    $apCsv = Import-Csv $apFile
+    Write-Host " ++ Serial Number: $($apCSV.'Device Serial Number').."
+    Write-Host " ++ Windows PID  : $($apCSV.'Windows Product ID').."
+    Write-Host " ++ Hardware Hash: $(($apCSV.'Hardware Hash').SubString(0,60)).."
+    Import-Module -name WindowsAutoPilotIntune
+    Write-Host " `nConnecting to Azure.."
+    $azureAdmin = Connect-AzureAD -ErrorAction Stop
+    Connect-AutoPilotIntune -user $azureAdmin.Account
+    Write-Host " `nChecking for enrollment details..`n"
+    $enrolledDevice = Get-DeviceFromAutoPilot -serialNumber $(($apCsv).'Device Serial Number')
+    if (!($enrolledDevice)) {
+        while (($newMachine = (Read-Host -Prompt "This device is not enrolled in AutoPilot. Would you like to enroll it now? (Y/N)")) -notmatch '[yY|nN]') { 
+            Write-Host " Y or N ? " -ForegroundColor Black -BackgroundColor Yellow
+        }
+        if ($newMachine -match "[yY]") {
+            Write-Host " ++ Enrolling device into AutoPilot.."
             Import-AutoPilotCSV -csvFile $apFile
+            $enrolledDevice = Get-DeviceFromAutoPilot -serialNumber $(($apCsv).'Device Serial Number')
+            Write-Host " ++ (Please note: this may take a while. A timer has been set for 25 minutes.)"
+            $sw = New-Object System.Diagnostics.Stopwatch
+            $sw.Start()
+            $ts = New-TimeSpan -Minutes 25
+            while ((!($enrolledDevice)) -and ($sw.ElapsedMilliseconds -le $ts.TotalMilliseconds)) {
+                Write-Progress -Activity "Enrolling Device: $(($apCsv).'Device Serial Number')" -Status "$($sw.Elapsed)" -PercentComplete ($($sw.ElapsedMilliseconds) / $($ts.TotalMilliseconds) * 100)
+                Start-Sleep -Seconds 10
+                $enrolledDevice = Get-DeviceFromAutoPilot -serialNumber $(($apCsv).'Device Serial Number')
+            }
+            $sw.Stop()
+            if ($enrolledDevice) {
+                Write-Host " `nDevice successfully enrolled. AAD details below.."
+                $enrolledDevice
+            }
+            else {
+                throw "Device not found. Bad news my dude."
+            }
         }
         else {
-            throw "APHash file not found locally."
+            Write-Host " ++ Will not enroll this device.."
         }
     }
-    catch {
-        Write-Host $_.Exception.Messages
+    else {
+        $enrolledDevice
     }
-}
-#endregion
-#region AD Sec Group Enroll
-if ($secGroup -match '[yY]') {
-
-}
-#endregion
-
-$grp = Get-AzureADGroup -SearchString $aadSecGroup
-foreach ($ap in $apConnect) {
-    while ((Get-AzureADDevice -SearchString $ap.'Device Serial Number').count -ne 1) {
-        Start-Sleep -Seconds 10
+    #endregion
+    #region Check if device is enrolled to AD Security Group
+    $aadGroup = Get-AzureADGroup -SearchString $aadSecGroup
+    if ($aadGroup -and ($newMachine -match "[yY]")) {
+        Write-Host " `nEnrolling device into AD Security Group: $($aadSecGroup).."
+        $isMember = $aadGroup | Get-AzureADGroupMember | Where-Object {$_.ObjectId -eq $enrolledDevice.ObjectId}
+        if (!($isMember)) {
+            while (($secGroup = (Read-Host -Prompt "Device is not enrolled in security group $($aadSecGroup). Would you like to enroll it now? (Y/N)")) -notmatch '[yY|nN]') { 
+                Write-Host " Y or N ? " -ForegroundColor Black -BackgroundColor Yellow
+            }
+            if ($secGroup -match "[yY]") {
+                Write-Host " ++ Enrolling this device.."
+                Add-AzureADGroupMember -ObjectId $aadGroup.ObjectId -RefObjectId $enrolledDevice.ObjectId
+            }
+        }
+        else {
+            Write-Host " ++ Will not enroll this device.."
+        }
     }
-    $device = Get-AzureADDevice -SearchString $ap.'Device Serial Number'
-    Add-AzureADGroupMember -ObjectId $grp.objectid -RefObjectId $device.objectid
+    else {
+        if ($newMachine -match "[yY]") {
+            throw "`"$($aacSecGroup)`" Security group not found on tenant. Skipping AAD Security Enrollment"
+        }
+        else {
+            Write-Host " ++ Device was not enrolled into AutoPilot - will skip AAD Security Group Enrollment Process.."
+        }
+    }
+    #endregion
 }
+catch {
+    Write-Host $_.Exception.Message -ForegroundColor Black -BackgroundColor Yellow
+}
+
 $ErrorActionPreference = "stop"
 $uefi = $true
 $disk = get-disk | Where-Object {$_.isboot -notlike $True}
