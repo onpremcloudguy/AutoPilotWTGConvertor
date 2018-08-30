@@ -125,10 +125,10 @@ $isoLtr = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
 Import-Module dism
 Expand-WindowsImage -ApplyPath "$($drvLtr)`:" -ImagePath "$($isoLtr):\sources\install.wim" -Index 3
 if ($uefi) {
-    $bcdBootArgs = "$drvLtr`:\windows /s $($systemPartition.driveletter)`: /v"
+    $bcdBootArgs = "$drvLtr`:\windows /s $($systemPartition.driveletter)`: /v /f UEFI"
 }
 else {
-    $bcdBootArgs = "$drvLtr`:\windows /s $($systemPartition.driveletter)`: /v /f BIOS"
+    $bcdBootArgs = "$drvLtr`:\windows /s $drvLtr`: /v /f BIOS"
 }
 
 Start-Process "bcdboot.exe" -ArgumentList " $bcdBootArgs" -Wait
