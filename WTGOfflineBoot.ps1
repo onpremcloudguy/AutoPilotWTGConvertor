@@ -217,7 +217,7 @@ try {
         $uefi = $true
     }
     Write-Host " ++ Mounting ISO image.."
-    Mount-DiskImage $isoPath -PassThru
+    Mount-DiskImage $isoPath -PassThru | Out-Null
     $isoLtr = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
     Import-Module dism
     Expand-WindowsImage -ApplyPath "$($drvLtr)`:" -ImagePath "$($isoLtr):\sources\install.wim" -Index 3
