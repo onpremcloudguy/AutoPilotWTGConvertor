@@ -33,12 +33,12 @@ if (!(Test-Path -Path $apFilePath)) {
     new-item -Path $apFilePath -ItemType Directory | Out-Null
 }
 Write-Host "Setting up local environment.."
-$nugetVer = (Get-PackageProvider -name "NuGet" -ListAvailable).version
+$nugetVer = (Get-PackageProvider -name "NuGet" -ListAvailable -ErrorAction SilentlyContinue).version
 if ($nugetVer.major -lt 2 -and $nugetVer.Minor -lt 8) {
     Install-PackageProvider -name "NuGet" -ForceBootstrap -Force | Out-Null
     Write-Host " ++ NuGet configured.."
 }
-if ((Get-InstalledScript -Name "Get-WindowsAutoPilotInfo").version -lt 1.3) {
+if ((Get-InstalledScript -Name "Get-WindowsAutoPilotInfo" -ErrorAction SilentlyContinue).version -lt 1.3) {
     Install-Script -Name "Get-WindowsAutoPilotInfo" -Force | Out-Null
     Write-Host " ++ AP script installed.."
 }
