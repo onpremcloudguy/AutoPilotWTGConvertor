@@ -166,6 +166,14 @@ try {
     elseif ($isos.Count -eq 0) {
         throw "Error no ISO found on the root of C: please add one"
     }
+    Write-Host " ++ Mounting ISO image.."
+    Mount-DiskImage $isoPath -PassThru | Out-Null
+    $isoLtr = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
+    Import-Module dism
+    $imageindex = 3
+    $isoimage = Get-WindowsImage -ImagePath "$($isoLtr):\sources\install.wim"  | Select-Object imageindex, imagename
+    Write-Host ($isoimage | Format-table | Out-String)
+    $imageindex = Read-Host " `nPlease select the ImageIndex which you would like to use, default is 3"
     Write-Host " `nPreparing system for installation of Windows 10.."
     $uefi = $true
     $disk = get-disk | Where-Object {$_.isboot -notlike $True}
@@ -216,11 +224,7 @@ try {
         $drvLtr = $windowsPartition.DriveLetter
         $uefi = $true
     }
-    Write-Host " ++ Mounting ISO image.."
-    Mount-DiskImage $isoPath -PassThru | Out-Null
-    $isoLtr = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
-    Import-Module dism
-    Expand-WindowsImage -ApplyPath "$($drvLtr)`:" -ImagePath "$($isoLtr):\sources\install.wim" -Index 3
+    Expand-WindowsImage -ApplyPath "$($drvLtr)`:" -ImagePath "$($isoLtr):\sources\install.wim" -Index $imageindex
     if ($uefi) {
         $bcdBootArgs = "$drvLtr`:\windows /s $($systemPartition.driveletter)`: /v"
     }
