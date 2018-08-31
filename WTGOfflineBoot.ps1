@@ -156,7 +156,7 @@ try {
         }
         Write-Host $menu
         $r = Read-Host "`nSelect an ISO to use by number"
-        $isopath = "C:\$($menu[$r-1].Split()[1])"
+        $isopath = "C:\$($menu[$r-1].trim().split()[1])"
         Write-Host " ++ Going to use the following ISO to install windows: $isopath"
     }
     elseif ($isos.count -eq 1) {
